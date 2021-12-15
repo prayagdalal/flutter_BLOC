@@ -1,0 +1,253 @@
+1.Pir with sqlite & mqtt
+-------------------------
+import RPi.GPIO as GPIO
+import sqlite3
+import datetime
+import time
+import paho.mqtt.client as mqtt
+broker_url = "broker.emqx.io"
+broker_port = 1883
+client = mqtt.Client()
+client.connect(broker_url,broker_port)
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(24,GPIO.OUT)
+GPIO.setup(18,GPIO.IN)
+
+connection = sqlite3.connect("PirSensor-SQL.db")
+
+crsr = connection.cursor()
+
+sql_createtbl = """create table if not exists DATA(
+    status TEXT,
+    time DATE);"""
+crsr.execute(sql_createtbl)
+
+while(True):
+    mypin = GPIO.input(18)
+    if mypin == True:
+        print("detected")
+        time.sleep(1)
+        GPIO.output(24,True)
+        crsr.execute("INSERT INTO DATA(status,time) VALUES(?,?)",("Object detected",datetime.datetime.now()))
+        crsr.execute("select * from DATA")
+        ans = crsr.fetchall()
+
+        print(ans)
+ 
+        client.publish("MS", qos=0,payload="Object detected - "+str(datetime.datetime.now()),retain=False)
+        
+        time.sleep(0.05)
+        GPIO.output(24,False)
+        print("Not detected")
+        time.sleep(0.3)
+
+==========================================================================================================
+2.Ir with sqlite & mqtt
+-------------------------
+import RPi.GPIO as IO
+import sqlite3
+import datetime
+import time
+import paho.mqtt.client as mqtt
+broker_url = "broker.emqx.io"
+broker_port = 1883
+client = mqtt.Client()
+client.connect(broker_url,broker_port)
+
+IO.setwarnings(False)
+IO.setmode(IO.BOARD)
+IO.setup(8, IO.IN)
+IO.setup(3, IO.OUT)
+
+connection = sqlite3.connect("IR-SQL.db")
+
+crsr = connection.cursor()
+
+sql_createtbl = """create table if not exists DATA(
+    status TEXT,
+    time DATE);"""
+crsr.execute(sql_createtbl)
+
+while 1:
+           if(IO.input(8) == True):
+               print("Obstacle detected !!")
+               IO.output(3, True)
+               crsr.execute("INSERT INTO DATA(status,time) VALUES(?,?)",("Object detected",datetime.datetime.now()))
+               crsr.execute("select * from DATA")
+               ans = crsr.fetchall()
+
+               print(ans)
+ 
+               client.publish("MS", qos=0,payload="Object detected - "+str(datetime.datetime.now()),retain=False)
+               time.sleep(0.2)
+           else:
+               print("Obstacle not detected !!")
+               IO.output(3, False)
+               time.sleep(0.2)
+===========================================================================================================
+3.Ultersonic with sqlite & mqtt
+-------------------------------
+import RPi.GPIO as GPIO
+import sqlite3
+import time
+import paho.mqtt.client as mqtt
+broker_url = "broker.emqx.io"
+broker_port = 1883
+client = mqtt.Client()
+client.connect(broker_url,broker_port)
+
+TRIG=21
+ECHO=20
+GPIO.setmode(GPIO.BCM)
+connection = sqlite3.connect("URLTRA-SQL.db")
+
+crsr = connection.cursor()
+
+while True:
+    print("distance measurement in progress")
+    GPIO.setup(TRIG,GPIO.OUT)
+    GPIO.setup(ECHO,GPIO.IN)
+    GPIO.output(TRIG,False)
+    print("waiting for sensor to settle")
+    time.sleep(0.2)
+    GPIO.output(TRIG,True)
+    time.sleep(0.00001)
+    GPIO.output(TRIG,False)
+    while GPIO.input(ECHO)==0:
+        pulse_start=time.time()
+    while GPIO.input(ECHO)==1:
+        pulse_end=time.time()
+    pulse_duration=pulse_end-pulse_start
+    distance=pulse_duration*17150
+    distance=round(distance,2)
+    print("distance:",distance,"cm")
+    sql_createtbl = """create table if not exists DATA(
+    distance DOUBLE,
+    time DATE);"""
+    crsr.execute(sql_createtbl)
+    crsr.execute("INSERT INTO DATA(distance,time) VALUES(?,?)",(distance,"20/21/2021"))
+    time.sleep(2)  
+    crsr.execute("select * from DATA")
+    ans = crsr.fetchall()
+
+    print(ans)
+ 
+    client.publish("MS", qos=0,payload=str(distance)+"  "+str("20/21/2021"),retain=False)
+
+===========================================================================================================
+4.i2c aurdino
+------------------------
+#include<Wire.h>
+int i2cdata;
+
+void setup() {
+  // put your setup code here, to run once:
+  Serial.begin(9600);
+  Wire.begin(0x8);
+  Wire.onRequest(sendData); 
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+  i2cdata = analogRead(A0);//Reads the Value of LDR(light).
+
+}
+void sendData() {   
+    Wire.write(i2cdata);  
+  }
+----------------------------------
+i2c rasbery-pi
+----------------------------------
+from smbus import SMBus
+import sqlite3
+import time
+addr = 0x8 # bus address
+bus = SMBus(1) # indicates /dev/ic2-1
+ 
+y = bus.read_byte_data(addr, 0x1)
+DD=y
+print(y)
+connection = sqlite3.connect("i2cSQL.db")
+
+crsr = connection.cursor()
+sql_createtbl = """create table if not exists DATA5(light VARCHAR(50));"""
+crsr.execute(sql_createtbl)
+crsr.execute("INSERT INTO DATA5(light) VALUES(?)",(DD))
+
+#crsr.execute("INSERT INTO DATA2(light) VALUES(?)",(2))
+time.sleep(2)   
+crsr.execute("select * from DATA5")
+ans = crsr.fetchall()
+
+print(ans)
+==========================================================================================================
+5.spi-aurdino
+-----------------
+#include <SPI.h>
+
+int ldr;
+byte c = 0, b=0;
+volatile byte pos;
+volatile boolean processing;
+byte i;
+
+void setup (void)
+{
+  Serial.begin (115200);
+  pinMode(MISO, OUTPUT);
+  pinMode(MOSI, INPUT);
+  SPCR |= _BV(SPE);
+  pos = 0;
+  processing = false;
+  SPI.attachInterrupt();
+}
+
+
+void loop (void)
+{
+  ldr = analogRead(A0);//Reads the Value of LDR(light).
+
+    //buf [pos] = 0;  
+    //pos = 0;
+    SPDR=ldr;
+ 
+}
+
+
+------------------
+spi-rasbery-pi
+----------------
+import spidev
+import sqlite3
+import datetime
+import time
+
+connection = sqlite3.connect("spi.db")
+
+crsr = connection.cursor()
+sql_createtbl = """create table if not exists spidata(light VARCHAR(50),datetime DATE);"""
+crsr.execute(sql_createtbl)
+
+spi=spidev.SpiDev(0,0)
+spi.open(0,0)
+#msg= 0xAA
+spi.max_speed_hz = 115200
+#while 1:
+ #   spi.writebytes([0x4,0x06])
+    #resp=spi.xfer2(0xAA)
+while(1):
+    y = spi.readbytes(1)
+    print (y)
+    
+    crsr.execute("INSERT INTO spidata(light,datetime) VALUES(?,?)",(str(y),str(datetime.datetime.now())))
+
+    #crsr.execute("INSERT INTO DATA2(light) VALUES(?)",(2))
+    time.sleep(2)  
+    crsr.execute("select * from spidata")
+    ans = crsr.fetchall()
+
+    print(ans)
+    time.sleep(0.5)
+
+
